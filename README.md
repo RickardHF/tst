@@ -63,3 +63,19 @@ See the [evaluator documentation](./docs/evaluator.md) for usage, arguments, eva
 
 In this repository we aim to have an application residing in the src folder. Here you can find a description of it and functional requirements.
 
+## Game
+
+The game is a browser-based TypeScript application built with Vite. From the repository root:
+
+```sh
+npm install
+npm run dev
+```
+
+Use `npm run build` to produce the static bundle in `dist/`, and `npm test` to run the Vitest suite. The source is organized by responsibility:
+
+- `src/game/` contains game state and logic.
+- `src/render/` contains canvas rendering.
+- `src/input/` contains input state handling.
+- `src/levels/` contains level data.
+- `src/main.ts` bootstraps the browser application.
