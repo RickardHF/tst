@@ -18,22 +18,22 @@ for explicit, controlled invocation or broaden them for automatic, implicit invo
 
 ## Step 1 — An explicit skill: `hello-ascii`
 
-- [ ] Create `.github/skills/hello-ascii/SKILL.md` with:
+- [x] Create `.github/skills/hello-ascii/SKILL.md` with:
   - YAML frontmatter with `name: hello-ascii` and a narrow `description` containing the trigger.
   - A title.
   - A `## When to use` section naming one explicit trigger phrase, e.g. *"show hello in ASCII
     art"*.
   - A `## Instructions` section telling Copilot to reply with ASCII art.
-- [ ] Test it: open Copilot Chat (Agent mode) and type exactly that phrase. Confirm it responds
+- [x] Test it: open Copilot Chat (Agent mode) and type exactly that phrase. Confirm it responds
       with your ASCII art.
 
 ## Step 2 — An implicit skill: `greeting`
 
-- [ ] Create `.github/skills/greeting/SKILL.md` with `name: greeting` and a broad `description`
+- [x] Create `.github/skills/greeting/SKILL.md` with `name: greeting` and a broad `description`
       in its YAML frontmatter. Include at least **4** varied greeting phrases (e.g. "hello",
       "hi", "good morning", a greeting in another language) in both the description and a
       `## When to use` section, plus a `## Instructions` section for a friendly response.
-- [ ] Test it: open a **new** chat session and just say "Hi" — no explicit mention of the skill.
+- [x] Test it: open a **new** chat session and just say "Hi" — no explicit mention of the skill.
       Confirm Copilot picks it up automatically.
 - [ ] Compare: temporarily narrow the `greeting` skill's frontmatter `description` and try the
       same greeting — notice how the *breadth of the description*, not the instructions, is what
@@ -48,14 +48,14 @@ for explicit, controlled invocation or broaden them for automatic, implicit invo
 
 This is where skills earn their keep — encoding a real team workflow.
 
-- [ ] Create a skill (e.g. `.github/skills/gh-issue-creator/SKILL.md`) that teaches Copilot to
+- [x] Create a skill (e.g. `.github/skills/gh-issue-creator/SKILL.md`) that teaches Copilot to
       create GitHub issues via `gh issue create`, using **different templates for different
       issue types** (e.g. a bug report vs. a feature request). Give it matching `name` and
       `description` fields in YAML frontmatter.
-- [ ] Start basic — get one template working end to end.
-- [ ] Check you can invoke it: ask Copilot to file a bug report and confirm it uses the right
+- [x] Start basic — get one template working end to end.
+- [x] Check you can invoke it: ask Copilot to file a bug report and confirm it uses the right
       template/labels.
-- [ ] Improve it — add the second template, tighten the "When to use" section.
+- [x] Improve it — add the second template, tighten the "When to use" section.
 
 Stage Two turns observations like these into programmatic and agentic evaluation checks. Here,
 the goal is simply to learn how description wording affects skill discovery.

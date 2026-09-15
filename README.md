@@ -57,6 +57,13 @@ Reference documentation lives in the [/docs](/docs/) folder:
 
 There are also workflows for running on GitHub Actions that are orchestrating agents. To see more about how these workflows works see the documentation [/docs/agent-orchestration.md](./docs/agent-orchestration.md).
 
+Two of those workflows are [GitHub Agentic Workflows](https://github.github.com/gh-aw/) written as markdown with YAML frontmatter and compiled to `.lock.yml` with `gh aw compile`:
+
+- [Backlog Prioritizer](./.github/workflows/backlog-prioritizer.md) — runs Mondays at 07:00 UTC and on manual dispatch. Keeps exactly one `priority: high|medium|low` label on every open issue, removes stale ones, and comments its reasoning whenever a priority changes.
+- [Backlog Grouper](./.github/workflows/backlog-grouper.md) — runs Mondays at 07:30 UTC and on manual dispatch. Links related and dependent issues as sub-issues under an existing overarching issue.
+
+Both keep the agent read-only and route every write through gh-aw safe outputs. Authoring conventions live in [.github/aw/instructions.md](./.github/aw/instructions.md). The three `priority:` labels must exist in the repository before the first run.
+
 Included in this repo you'll find an evaluator tool, which resides in the [/evaluator](/evaluator/) folder. This tool takes a look at all the agent and skill definitions available in the directory, evaluates them with the help of AI and provides a score. It can also format the score as a badge to easily have an overview of the current situation
 
 See the [evaluator documentation](./docs/evaluator.md) for usage, arguments, evaluation flow, and badge generation.
