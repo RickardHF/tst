@@ -1,6 +1,7 @@
 
 import { z } from "zod";
 import { CopilotClient, defineTool } from "@github/copilot-sdk";
+import { parseAgentFrontmatter, isKnownModel } from "./agentFrontmatter.js";
 
 type EvaluationResult = {
     score: number;
@@ -55,6 +56,13 @@ Every evaluation should include a reasoning to justify the score given.
 9 - Outstanding: The agent or skill performs exceptionally well, with very few issues or areas for improvement.
 10 - Exceptional: The agent or skill performs exceptionally well, exceeding expectations and demonstrating advanced capabilities
 </scoring>`;
+
+const agentEvaluationCriteria = `
+<agent-specific-criteria>
+When evaluating an agent definition, also weigh the following as part of the overall score:
+- Model fit: does the declared "model" suit the agent's stated role and description (e.g. a lightweight/fast model for simple tasks, a stronger reasoning model for complex or high-stakes tasks)? A missing/undefined model is an acceptable design choice and should not be penalized on its own.
+- Tool scope: is the "tools" allow-list appropriately scoped for the agent's description? Flag lists that are too loose (e.g. granting broad/wildcard access far beyond what the role needs) as well as lists that are too narrow (e.g. missing tools the agent clearly needs to fulfill its description).
+</agent-specific-criteria>`;
 
 async function evaluateBase(systemMessage: string, evaluationPrompt: string): Promise<EvaluationResult> {
     for (let attempt = 1; attempt <= maxEvaluationAttempts; attempt++) {
@@ -174,10 +182,21 @@ ${skillArtifacts.map(artifact => `<artifact path="${artifact.path}">${artifact.c
 }
 
 async function evaluateAgentDefinition(agentDefinition: string): Promise<EvaluationResult> {
+    const parsedFrontmatter = parseAgentFrontmatter(agentDefinition);
+    if (!parsedFrontmatter.ok) {
+        return {
+            score: 0,
+            reasoning: `Agent definition frontmatter is malformed: ${parsedFrontmatter.error}.`,
+        };
+    }
+
+    const { model, tools } = parsedFrontmatter.frontmatter;
+    const modelIsUnrecognized = model !== undefined && !isKnownModel(model);
 
     const systemMessage = `
 ${baseRole}
 ${scoringSystem}
+${agentEvaluationCriteria}
 `;
     const evaluationPrompt = `
 Evaluate the following agent definition based on the criteria provided. 
@@ -185,9 +204,23 @@ Evaluate the following agent definition based on the criteria provided.
 <agent-definition>
 ${agentDefinition}
 </agent-definition>
+
+<parsed-metadata>
+model: ${model ?? "(not set)"}
+tools: ${tools ? JSON.stringify(tools) : "(not set)"}
+</parsed-metadata>
 `;
 
-    return await evaluateBase(systemMessage, evaluationPrompt);
+    const result = await evaluateBase(systemMessage, evaluationPrompt);
+
+    if (modelIsUnrecognized) {
+        return {
+            ...result,
+            reasoning: `${result.reasoning} Note: model "${model}" is not in the list of recognized models.`,
+        };
+    }
+
+    return result;
 }
 
 

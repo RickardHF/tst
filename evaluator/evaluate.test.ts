@@ -168,3 +168,92 @@ test(
         );
     }
 );
+
+// No live Copilot SDK call: malformed frontmatter is rejected before any evaluation prompt is sent.
+const fastMalformedTimeout = 2_000;
+
+test(
+    "evaluateAgentDefinition scores a missing frontmatter block as 0",
+    { timeout: fastMalformedTimeout },
+    async () => {
+        const evaluation = await evaluateAgentDefinition("Just some instructions, no frontmatter at all.");
+
+        assert.equal(evaluation.score, 0);
+        assert.match(evaluation.reasoning, /malformed/i);
+    }
+);
+
+test(
+    "evaluateAgentDefinition scores invalid YAML frontmatter as 0",
+    { timeout: fastMalformedTimeout },
+    async () => {
+        const definition = `---
+name: broken
+tools: [unclosed
+---
+
+Body text.
+`;
+        const evaluation = await evaluateAgentDefinition(definition);
+
+        assert.equal(evaluation.score, 0);
+        assert.match(evaluation.reasoning, /malformed/i);
+    }
+);
+
+test(
+    "evaluateAgentDefinition scores a missing required field as 0",
+    { timeout: fastMalformedTimeout },
+    async () => {
+        const definition = `---
+name: thing
+---
+
+Body text without a description field.
+`;
+        const evaluation = await evaluateAgentDefinition(definition);
+
+        assert.equal(evaluation.score, 0);
+        assert.match(evaluation.reasoning, /description/i);
+    }
+);
+
+test(
+    "evaluateAgentDefinition scores a non-array tools field as 0",
+    { timeout: fastMalformedTimeout },
+    async () => {
+        const definition = `---
+name: thing
+description: does something
+tools: read
+---
+
+Body text.
+`;
+        const evaluation = await evaluateAgentDefinition(definition);
+
+        assert.equal(evaluation.score, 0);
+        assert.match(evaluation.reasoning, /tools/i);
+    }
+);
+
+test(
+    "evaluateAgentDefinition notes an unrecognized model without changing the score",
+    { timeout: liveCallTimeout },
+    async () => {
+        const definitionWithUnknownModel = `---
+name: changelog-writer
+description: Writes concise, user-facing changelog entries from merged pull requests.
+tools: ['read', 'edit']
+model: totally-made-up-model
+---
+
+You write changelog entries. Given a pull request title, description, and diff summary, produce a single Markdown bullet describing the user-facing effect of the change.
+`;
+        const evaluation = await evaluateAgentDefinition(definitionWithUnknownModel);
+
+        assert.equal(typeof evaluation.score, "number");
+        assert.ok(evaluation.score >= 1 && evaluation.score <= 10);
+        assert.match(evaluation.reasoning, /not.*recognized model/i);
+    }
+);
