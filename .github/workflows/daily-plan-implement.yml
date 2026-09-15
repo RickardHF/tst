@@ -1,0 +1,113 @@
+name: Daily Plan and Implement
+
+on:
+  schedule:
+    # Daily at 08:00 UTC, one hour after the Monday backlog prioritizer.
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Select and report an issue without starting implementation
+        type: boolean
+        default: true
+
+permissions:
+  actions: write
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: daily-plan-implement-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  select-and-dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Select the next issue
+        id: select
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          gh issue list \
+            --state open \
+            --limit 1000 \
+            --json number,createdAt,labels > "$RUNNER_TEMP/issues.json"
+
+          gh pr list \
+            --state open \
+            --limit 1000 \
+            --json headRefName \
+            --jq '[.[].headRefName | capture("^agent-plan/issue-(?<number>[0-9]+)-[0-9]+$").number? | tonumber]' \
+            > "$RUNNER_TEMP/active-issues.json"
+
+          selection=$(jq -c \
+            --slurpfile active "$RUNNER_TEMP/active-issues.json" \
+            '
+              def priority_rank:
+                ([.labels[].name] | if index("priority: high") then 0
+                  elif index("priority: medium") then 1
+                  elif index("priority: low") then 2
+                  else 3
+                  end);
+
+              map(select(.number as $number | ($active[0] | index($number) | not)))
+              | map(. + {rank: priority_rank})
+              | sort_by(.rank, .createdAt, .number)
+              | first // empty
+            ' "$RUNNER_TEMP/issues.json")
+
+          if [[ -z "$selection" ]]; then
+            echo "issue_number=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          issue_number=$(jq -r '.number' <<< "$selection")
+          priority_rank=$(jq -r '.rank' <<< "$selection")
+          echo "issue_number=$issue_number" >> "$GITHUB_OUTPUT"
+          echo "priority_rank=$priority_rank" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize selection
+        env:
+          ISSUE_NUMBER: ${{ steps.select.outputs.issue_number }}
+          PRIORITY_RANK: ${{ steps.select.outputs.priority_rank }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$ISSUE_NUMBER" ]]; then
+            echo "No eligible open issue was found; implementation was not started." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          case "$PRIORITY_RANK" in
+            0) priority="priority: high" ;;
+            1) priority="priority: medium" ;;
+            2) priority="priority: low" ;;
+            3) priority="unprioritized" ;;
+            *) priority="unknown" ;;
+          esac
+
+          echo "Selected issue #${ISSUE_NUMBER} (${priority})." >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "Dry run enabled; implementation was not started." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Start Plan and Implement
+        if: >-
+          steps.select.outputs.issue_number != '' &&
+          !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.select.outputs.issue_number }}
+          TARGET_REF: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          gh workflow run plan-implement.yml \
+            --ref "$TARGET_REF" \
+            -f "issue-number=$ISSUE_NUMBER"

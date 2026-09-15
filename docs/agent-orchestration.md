@@ -5,14 +5,54 @@ labeled issue into a reviewed pull request. The design keeps humans
 accountable for outcomes by enforcing a visible plan, a bounded changeset,
 automated evidence, and explicit approval before merge.
 
+## Local issue loop
+
+The local runner processes one or more issues sequentially through the existing
+`orchestrator` agent and a fresh, read-only reviewer session:
+
+```bash
+node scripts/orchestrate-issues.mjs --max-rounds 3 42 57
+```
+
+It requires Node.js, Git, an authenticated `gh` CLI, and an authenticated
+Copilot CLI. Preflight checks all prerequisites before starting an agent. The
+runner fetches each issue, creates an isolated worktree at
+`.agent-runs/<run-id>/issue-<number>`, implements, reviews, and sends blocking
+review findings into the next implementation round. Approval advances to the
+next issue. A failed process, blocked access, invalid response, successful run
+with no changes, or exhausted round limit parks the intact worktree and
+continues with the queue. The command exits nonzero when anything is not
+approved.
+
+Agent prompts receive the issue and feedback directly. The temporary
+`out/plan.json` required by the existing implementer is created inside the
+issue worktree and removed before review. Logs and state remain under the run
+directory. The runner never commits, pushes, updates issues, stashes, resets,
+or cleans the user's checkout; integrate or remove retained branches and
+worktrees manually after inspection.
+
+`--allow-all-tools` approves the tools already exposed to a noninteractive
+Copilot session. It does not grant filesystem or network access through the OS
+sandbox. The runner does not disable the sandbox, use `--allow-all-paths`, or
+retry an unchanged sandbox failure. The current orchestrator also performs its
+mandatory repository research, summary, implementer, and C# delegation chain,
+which can make small tasks slower than a direct implementation agent.
+
 ## Workflows
 
 | Workflow                                                      | Trigger                                                                | Purpose                                                           |
 | ------------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [Daily Plan and Implement](../.github/workflows/daily-plan-implement.yml) | Daily at 08:00 UTC or `workflow_dispatch`                   | Selects one eligible issue by priority and dispatches Plan and Implement. |
 | [Plan and Implement](../.github/workflows/plan-implement.yml) | `issues.labeled` (`copilot:plan-and-implement`) or `workflow_dispatch` | Plans, risk-scores, and implements the change on an agent branch. |
 | [Plan Gate](../.github/workflows/plan-gate.yml)               | `pull_request` to `main`                                               | Blocks PRs whose body does not follow the required plan template. |
 | [Evaluate Agents & Skills](../.github/workflows/evaluate.yml) | `push` to `main` or `workflow_dispatch`                                | Scores every agent/skill definition, publishes a badge, and commits the `eval-scores.json` baseline. |
 | [Evaluate Changed Agents & Skills](../.github/workflows/evaluate-pr.yml) | `pull_request` to `main`                                     | Scores only the agent/skill artifacts changed in the PR and fails if any artifact's score drops more than 2 points versus the `main` baseline. |
+
+The daily selector ranks open issues by `priority: high`, `priority: medium`,
+`priority: low`, then no priority label, choosing the oldest issue in the
+best available group. It excludes issues that already have an open generated
+`agent-plan/issue-<number>-<run-id>` pull request. Manual runs default to dry-run
+mode so the selected issue can be reviewed without starting implementation.
 
 ## Reusable actions
 
@@ -27,7 +67,8 @@ automated evidence, and explicit approval before merge.
 
 ```mermaid
 flowchart TD
-    A["Issue labeled copilot:plan-and-implement"] --> B["prepare: upload issue.md"]
+  S["Daily priority selector"] -->|"workflow_dispatch + issue-number"| B["prepare: upload issue.md"]
+  A["Issue labeled copilot:plan-and-implement"] --> B
     B --> C["spec_analyzer: goal / scope / steps / mitigations / rollback"]
     B --> D["risk_reviewer: low / medium / high"]
     C --> E["plan_merger: merge + normalize risk"]
