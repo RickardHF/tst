@@ -1,6 +1,4 @@
 ---
-name: csharper
-description: Creates and modifies C# code.
 argument-hint: Tell me what to create or modify in C# code.
 tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'todo'] 
 user-invocable: false
