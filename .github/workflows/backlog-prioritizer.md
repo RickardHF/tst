@@ -17,7 +17,8 @@ on:
 permissions:
   contents: read
   issues: read
-  copilot-requests: write
+  # User-owned repo has no org Copilot policy; inference bills to the COPILOT_GITHUB_TOKEN owner's seat.
+  copilot-requests: none
 
 concurrency:
   group: backlog-prioritizer-${{ github.repository }}
