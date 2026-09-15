@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-09-15T11:18:30.733Z",
+  "scores": {
+    ".github/agents/summarizer.agent.md": {
+      "score": 7,
+      "reasoning": "Clear, focused purpose with appropriate model choice (Sonnet 5 suits synthesis/reasoning task). Tools left unset is reasonable since summarization is a pure text-synthesis task requiring no external tool calls. The prompt is concise and correctly instructs on summary + plan output, but is fairly thin—lacks structure guidance (e.g., expected output format/sections), guidance on handling incomplete/conflicting findings, or length constraints, which would improve consistency and maintainability. Non-user-invocable setting fits its role as a sub-agent. Overall solid but minimal design.",
+      "type": "agent"
+    },
+    ".github/agents/spec_analyzer.agent.md": {
+      "score": 8,
+      "reasoning": "Clear, focused agent with well-defined JSON output contract and reasonable model choice (Sonnet fits planning/reasoning task). Tools (read, search) are appropriately scoped for analysis-only work with no write access needed. Minor weaknesses: the 'scope' field allows ambiguous type (object or string), which could cause inconsistent outputs, and there's no explicit error-handling guidance for malformed input. Overall well-structured and maintainable.",
+      "type": "agent"
+    },
+    ".github/agents/risk_reviewer.agent.md": {
+      "score": 7,
+      "reasoning": "Clear, single-purpose agent with well-defined risk criteria and strict JSON output contract, aiding maintainability. Tool scope (read, search) is well-matched to a read-only risk-assessment role—no excessive permissions. Model choice (Sonnet) is reasonable for the judgment-heavy task. Minor weaknesses: guidance could better resolve conflicting signals across categories, and there's no explicit fallback for ambiguous/insufficient input.",
+      "type": "agent"
+    },
+    ".github/agents/reporesearcher.agent.md": {
+      "score": 5,
+      "reasoning": "Tool scope (read, search, web) is well-matched to a read-only research role, and the Kimi K2.7 Code model is a reasonable fit for codebase-focused research without needing top-tier reasoning. However, the system prompt is very thin—it merely restates the description without giving concrete guidance on research methodology, how to prioritize sources, what depth of analysis is expected, or the expected output format/structure for findings. There's no guidance on handling ambiguous requests or citing specific files/line numbers, which would improve usefulness and consistency. It's a workable but minimal definition, average overall with clear room for more actionable instructions.",
+      "type": "agent"
+    },
+    ".github/agents/orchestrator.agent.md": {
+      "score": 4,
+      "reasoning": "Tool/agent scope is reasonable (agent+todo suffice for pure orchestration), and missing model is fine for a coordination role. However, the prompt has a typo (\"tela request\"), vague/ambiguous branching logic (no clear criteria for what counts as \"a task to implement\"), and instructs implementer and csharper to work in parallel on the same task without any division of labor or conflict-resolution guidance, which risks overlapping/conflicting edits. No guidance on handling failures from sub-agents, no synthesis/reporting step back to the user after implementation, and no todo-tracking instructions despite todo being an allowed tool. Overall it's a workable skeleton but underspecified and has correctness risks in its delegation logic.",
+      "type": "agent"
+    },
+    ".github/agents/implementer.agent.md": {
+      "score": 8,
+      "reasoning": "Well-structured agent definition with clear workflow, sensible boundaries (scope limits, no commits, no out/ edits), and solid reporting requirements. Tool scope (view, glob, grep, edit, write, bash) fits an implementer role well. Model choice (GPT-5.6 Luna) is reasonable for implementation tasks requiring moderate reasoning, though a stronger reasoning model might be preferable for complex plans - not a major flaw since Luna is mid-tier. Minor gap: no explicit test/build tool restrictions beyond bash, but that's covered by bash. Overall clear, actionable, and maintainable prompt with good safeguards against scope creep and false completion claims.",
+      "type": "agent"
+    },
+    ".github/agents/evaluator.agent.md": {
+      "score": 8,
+      "reasoning": "Clear, well-scoped agent: purpose, workflow steps, exact CLI invocation patterns, failure handling, and a structured output format are all specified, aiding maintainability and reproducibility. Tool scope (read, bash) is appropriately minimal for a CLI-running/reporting task—no unnecessary write/edit access. Model choice \"Auto\" delegates selection reasonably since the task is largely mechanical (run CLI, parse JSON, summarize) rather than deep reasoning, though a stronger reasoning model might improve nuanced summarization/recommendations. Minor gaps: no explicit guidance on handling partial/malformed JSON lines beyond generic failure note, and the handoff to \"Plan\" is a nice touch but not elaborated. Overall a solid, focused definition with only minor room for improvement.",
+      "type": "agent"
+    },
+    ".github/agents/doc-writer.agent.md": {
+      "score": 4,
+      "reasoning": "The agent's purpose is clear and tool scope (edit/read/search) is reasonable for documentation work, though tool names don't match standard conventions (view/grep/glob), which may cause resolution issues. Missing model is acceptable. However, the definition is very thin: no guidance on documentation style, structure, workflow, or how to handle ambiguous requests, limiting reliability and maintainability. Description and instructions are largely redundant restatements rather than actionable guidance.",
+      "type": "agent"
+    },
+    ".github/agents/csharper.agent.md": {
+      "score": 4,
+      "reasoning": "Functional but minimal agent definition. Clear core directive (C#-only edits, report ignored files) but lacks detail on style/testing/error handling. Tool list (web, agent, execute) is broader than the narrow stated role justifies, and model choice is a reasonable but unverified fit for potentially complex C# tasks.",
+      "type": "agent"
+    },
+    ".github/agents/broken-reviewer.agent.md": {
+      "score": 2,
+      "reasoning": "Vague description and minimal instructions provide no real guidance on scope, review criteria, output format, or workflow. Tools are minimally scoped (read/search reasonable) but 'edit' is questionable for a reviewer role (reviewers typically shouldn't modify code). No model specified is acceptable, but combined with near-empty prompt, this agent lacks the structure needed for consistent, useful behavior—far below basic expectations.",
+      "type": "agent"
+    },
+    ".agents/skills/hello-ascii/SKILL.md": {
+      "score": 5,
+      "reasoning": "Name/description fit is accurate and simple, no missing references, and it's portable with no hardcoded specifics. However the skill is trivial, lacks concrete ASCII art examples/templates or generation logic, giving minimal actionable guidance beyond restating its own description. Functional but very basic.",
+      "type": "skill"
+    },
+    ".agents/skills/greeting.disabled/SKILL.md": {
+      "score": 7,
+      "reasoning": "The skill is simple, self-contained, and clearly matches its name/description—triggering on greetings and responding in pirate speak. No referenced files are missing, and it's fully portable with no project-specific details. Minor deduction: the description doesn't mention the pirate-speak twist, so there's a slight mismatch between description and actual behavior, which could surprise users expecting a generic greeting. Note: skill \"name\" (\"greeting\") does not match its folder (\"greeting.disabled\").",
+      "type": "skill"
+    },
+    ".agents/skills/gh-issue-creator/SKILL.md": {
+      "score": 5,
+      "reasoning": "Name/description fit is good and templates referenced are actually present as artifacts (parser flag appears to be a path-resolution false positive). However, the skill body is very thin: no concrete instructions for GitHub API usage (auth, endpoints, CLI vs API), no guidance on which template to pick, no error handling, and instructions are generic/boilerplate (\"Define the functionality...\" placeholder text left in). It's functional but underdeveloped compared to a polished skill.",
+      "type": "skill"
+    },
+    ".agents/skills/generic-skill-name/SKILL.md": {
+      "score": 3,
+      "reasoning": "Content is reasonable generic C# style guidance, but name \"generic-skill-name\" and description \"This might help with some tasks\" are placeholder-like, vague, and don't reflect the actual C# coding standards content at all. This severe name/description mismatch would prevent proper skill discovery/invocation. No missing files, portable content, but metadata quality is poor.",
+      "type": "skill"
+    },
+    ".agents/skills/description-to-github-issues/SKILL.md": {
+      "score": 5,
+      "reasoning": "The skill is well-structured with a clear, thorough procedure (read docs, plan, dedupe, auth check, create, verify) and good name/description fit for its stated purpose. However, portability is significantly compromised: it hardcodes default file paths (src/DESCRIPTION.md etc.) and, worse, embeds project-specific content (\"the incomplete McSquishy description,\" \"TypeScript, automated tests, no cloud-resource dependency, and browser execution,\" \"unspecified game mechanics... win/loss behavior\") that reveals this was written for one specific game project rather than as a generic reusable skill. This baked-in specificity means the skill would behave oddly or require significant editing when applied to non-game, non-TypeScript projects, undermining reusability. Additionally, the referenced default input files are missing from the repo (flagged in metadata), though this is minor since they're just fallback defaults. Overall a competent, detailed skill let down by clear project-specific leakage in an otherwise generic-sounding skill.",
+      "type": "skill"
+    },
+    ".github/skills/broken-greeting/SKILL.md": {
+      "score": 4,
+      "reasoning": "Name/description are consistent with body content, and no missing references. However it's a trivial, narrow single-case skill with no real utility, no error handling, poor generality, and questionable value as a \"skill\" (better as inline instruction). No portability issues since it's generic but overly simplistic.",
+      "type": "skill"
+    }
+  }
+}
