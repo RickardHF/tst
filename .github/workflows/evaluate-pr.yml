@@ -1,0 +1,117 @@
+name: Evaluate Changed Agents & Skills
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  evaluate-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      copilot-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: evaluator/package-lock.json
+
+      - name: Install dependencies
+        working-directory: evaluator
+        run: npm ci
+
+      - name: Discover changed agent/skill artifacts
+        id: discover
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          changed_files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+
+          agent_files=""
+          skill_dirs=""
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            [ -f "$file" ] || continue # skip deleted files
+
+            case "$file" in
+              .github/agents/*.agent.md|.agents/agents/*.agent.md)
+                agent_files="${agent_files}${agent_files:+,}${GITHUB_WORKSPACE}/$file"
+                ;;
+              .agents/skills/*/*|.github/skills/*/*)
+                dir=$(echo "$file" | sed -E 's#(\.agents/skills/[^/]+/|\.github/skills/[^/]+/).*#\1#')
+                dir="${dir%/}"
+                if [ -f "$dir/SKILL.md" ]; then
+                  abs_dir="${GITHUB_WORKSPACE}/${dir}"
+                  case ",$skill_dirs," in
+                    *,"$abs_dir",*) ;; # already recorded
+                    *) skill_dirs="${skill_dirs}${skill_dirs:+,}${abs_dir}" ;;
+                  esac
+                fi
+                ;;
+            esac
+          done <<< "$changed_files"
+
+          targets="${agent_files}${agent_files:+,}${skill_dirs}"
+          echo "targets=${targets}" >> "$GITHUB_OUTPUT"
+          if [ -z "$targets" ]; then
+            echo "has_targets=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_targets=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Changed agent files: ${agent_files:-none}"
+          echo "Changed skill directories: ${skill_dirs:-none}"
+
+      - name: Run evaluation on changed artifacts
+        if: steps.discover.outputs.has_targets == 'true'
+        working-directory: evaluator
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npx tsx cli.ts evaluate \
+            --files "${{ steps.discover.outputs.targets }}" \
+            --json \
+            2>eval_errors.txt | tee pr_eval_results.jsonl
+          echo "done"
+
+      - name: Fetch baseline scores from main
+        if: steps.discover.outputs.has_targets == 'true'
+        working-directory: evaluator
+        run: |
+          git fetch origin main --depth=1
+          git show origin/main:eval-scores.json > baseline.json 2>/dev/null || echo '{"generatedAt":"","scores":{}}' > baseline.json
+
+      - name: Compare scores against baseline
+        if: steps.discover.outputs.has_targets == 'true'
+        working-directory: evaluator
+        run: |
+          npx tsx cli.ts compare-scores \
+            --current pr_eval_results.jsonl \
+            --baseline baseline.json \
+            --strip-prefix "../" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Report evaluation errors
+        if: always() && steps.discover.outputs.has_targets == 'true'
+        working-directory: evaluator
+        run: |
+          if [ -s eval_errors.txt ]; then
+            echo "::warning::Some evaluations encountered errors (non-fatal):"
+            while IFS= read -r line; do
+              echo "::warning::${line}"
+            done < eval_errors.txt
+          fi
+
+      - name: No changed artifacts
+        if: steps.discover.outputs.has_targets == 'false'
+        run: echo "No changed agent or skill definitions in this pull request." >> "$GITHUB_STEP_SUMMARY"

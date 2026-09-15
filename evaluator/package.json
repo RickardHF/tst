@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "postbuild": "chmod +x dist/cli.js && cp valid-models.json dist/valid-models.json",
-    "test": "node --import tsx --test --experimental-test-module-mocks cli.test.ts evaluate.test.ts"
+    "test": "node --import tsx --test --experimental-test-module-mocks cli.test.ts evaluate.test.ts build-scores.test.ts compare-scores.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

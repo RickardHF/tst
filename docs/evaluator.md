@@ -87,13 +87,54 @@ npx tsx cli.ts badge \
 
 The badge contains one score row per valid result and a rounded average. Score colors are red for 1–4, amber for 5–6, teal-green for 7–8, and bright green for 9–10.
 
-## GitHub Actions workflow
+## Build a per-artifact score baseline
 
-The [Evaluate Agents & Skills workflow](../.github/workflows/evaluate.yml) runs manually with `workflow_dispatch`. It installs the evaluator dependencies, evaluates the repository with `--json`, and separates stdout JSONL from stderr errors. It then:
+`build-scores` turns an `eval_results.jsonl` file into a keyed JSON document, one entry per artifact (a skill folder is one entry, keyed by its `SKILL.md` path):
 
-- Adds workflow annotations for each result, with scores below 5 marked as warnings.
-- Writes a Markdown table and rounded average to the job summary.
-- Generates and uploads `eval-badge.svg` as an artifact.
-- Commits a changed `eval-badge.svg` back to the repository with `[skip ci]`.
+```bash
+npx tsx cli.ts build-scores \
+  --input eval_results.jsonl \
+  --output ../eval-scores.json
+```
 
-The workflow requires permission to make Copilot requests and write repository contents. A missing or empty result file prevents summary and badge data from being generated, while individual evaluation errors are surfaced as workflow warnings.
+```json
+{
+  "generatedAt": "2026-09-15T00:00:00.000Z",
+  "scores": {
+    ".github/agents/csharper.agent.md": { "score": 8, "reasoning": "...", "type": "agent" },
+    ".agents/skills/example/SKILL.md": { "score": 6, "reasoning": "...", "type": "skill" }
+  }
+}
+```
+
+This file is committed to `main` (see the workflow section below) and acts as the baseline the PR check compares against.
+
+## Compare scores against a baseline
+
+`compare-scores` evaluates only the artifacts changed in a PR and fails if any artifact's score dropped by more than the threshold (default 2 points) versus a baseline `eval-scores.json`:
+
+```bash
+npx tsx cli.ts compare-scores \
+  --current pr_eval_results.jsonl \
+  --baseline baseline.json \
+  --summary "$GITHUB_STEP_SUMMARY" \
+  --threshold 2
+```
+
+Artifacts with no prior baseline entry (new files) are never treated as regressions. The command prints a Markdown comparison table and exits non-zero only when at least one artifact regressed past the threshold; evaluation errors captured separately (e.g. in `eval_errors.txt`) are non-fatal and only reported as warnings.
+
+## GitHub Actions workflows
+
+Two workflows cooperate to keep the baseline current and gate pull requests:
+
+- [Evaluate Agents & Skills](../.github/workflows/evaluate.yml) runs on `push` to `main` and on `workflow_dispatch`. It evaluates the whole repository with `--json`, separates stdout JSONL from stderr errors, then:
+  - Adds workflow annotations for each result, with scores below 5 marked as warnings.
+  - Writes a Markdown table and rounded average to the job summary.
+  - Generates and uploads `eval-badge.svg` as an artifact.
+  - Builds `eval-scores.json` with `build-scores` from the same results.
+  - Commits a changed `eval-badge.svg` and/or `eval-scores.json` back to `main` with `[skip ci]`.
+- [Evaluate Changed Agents & Skills](../.github/workflows/evaluate-pr.yml) runs on `pull_request` targeting `main`. It diffs the PR against its base to find changed `.agent.md` files and changed skill directories (deduplicated to one artifact per folder), evaluates only those with `--files`, fetches `eval-scores.json` from `origin/main` as the baseline, and runs `compare-scores` to fail the check on a >2-point regression. If no agent/skill files changed, the job reports that and does not call the evaluator.
+
+Both workflows require permission to make Copilot requests; the push-triggered workflow additionally needs `contents: write` to commit the badge and score baseline. A missing or empty result file prevents summary and badge/score data from being generated, while individual evaluation errors are surfaced as workflow warnings rather than failures.
+
+Branch protection on `main` (requiring the PR workflow's check and PR review before merge) is configured manually by a repo admin — see [Branch protection on `main`](agent-orchestration.md#branch-protection-on-main).

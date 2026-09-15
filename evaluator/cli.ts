@@ -5,6 +5,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { evaluateAgentDefinition, evaluateSkillDefinition } from "./evaluate.js";
 import { generateBadgeSvg, type BadgeEntry } from "./badge.js";
+import { buildScoresFile, parseEvalResultsJsonl, parseScoresFile } from "./build-scores.js";
+import { compareScores, renderComparisonMarkdown } from "./compare-scores.js";
 
 const program = new Command();
 
@@ -261,6 +263,79 @@ program
         fs.mkdirSync(path.dirname(outputPath), { recursive: true });
         fs.writeFileSync(outputPath, svg, "utf-8");
         console.log(`Badge written to: ${outputPath} (${entries.length} entries)`);
+    });
+
+program
+    .command("build-scores")
+    .description("Convert newline-delimited evaluation results into a persisted per-artifact baseline file")
+    .option("-i, --input <file>", "Path to the JSONL results file", "eval_results.jsonl")
+    .option("-o, --output <file>", "Path to write the scores JSON file", "../eval-scores.json")
+    .action(async (options) => {
+        const inputPath = path.resolve(options.input);
+        if (!fs.existsSync(inputPath)) {
+            console.error(`Input file not found: ${inputPath}`);
+            process.exit(1);
+        }
+
+        const results = parseEvalResultsJsonl(fs.readFileSync(inputPath, "utf-8"));
+        if (results.length === 0) {
+            console.error("No valid evaluation entries found in input file.");
+            process.exit(1);
+        }
+
+        const scoresFile = buildScoresFile(results);
+        const outputPath = path.resolve(options.output);
+        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+        fs.writeFileSync(outputPath, JSON.stringify(scoresFile, null, 2) + "\n", "utf-8");
+        console.log(`Scores written to: ${outputPath} (${results.length} entries)`);
+    });
+
+program
+    .command("compare-scores")
+    .description("Compare current evaluation results against a stored baseline and fail on score regressions")
+    .option("-c, --current <file>", "Path to current evaluation results (JSONL)", "pr_eval_results.jsonl")
+    .option("-b, --baseline <file>", "Path to baseline scores JSON file", "baseline.json")
+    .option("-s, --summary <file>", "Optional path to append a Markdown summary table")
+    .option("-t, --threshold <number>", "Regression threshold in points", "2")
+    .option("-p, --strip-prefix <prefix>", "Leading path prefix to remove from current fileNames before matching against the baseline", "")
+    .action(async (options) => {
+        const currentPath = path.resolve(options.current);
+        if (!fs.existsSync(currentPath)) {
+            console.error(`Current results file not found: ${currentPath}`);
+            process.exit(1);
+        }
+
+        const stripPrefix: string = options.stripPrefix;
+        let current = parseEvalResultsJsonl(fs.readFileSync(currentPath, "utf-8"));
+        if (stripPrefix) {
+            current = current.map((result) => ({
+                ...result,
+                fileName: result.fileName.startsWith(stripPrefix) ? result.fileName.slice(stripPrefix.length) : result.fileName,
+            }));
+        }
+        if (current.length === 0) {
+            console.log("No changed agent/skill artifacts to compare.");
+            return;
+        }
+
+        const baselinePath = path.resolve(options.baseline);
+        const baseline = fs.existsSync(baselinePath)
+            ? parseScoresFile(fs.readFileSync(baselinePath, "utf-8"))
+            : { generatedAt: new Date(0).toISOString(), scores: {} };
+
+        const threshold = Number(options.threshold);
+        const outcome = compareScores(current, baseline, threshold);
+        const markdown = renderComparisonMarkdown(outcome);
+
+        console.log(markdown);
+        if (options.summary) {
+            fs.appendFileSync(path.resolve(options.summary), markdown + "\n", "utf-8");
+        }
+
+        if (outcome.regressions.length > 0) {
+            console.error(`${outcome.regressions.length} artifact(s) regressed by more than ${threshold} point(s).`);
+            process.exitCode = 1;
+        }
     });
 
 program.parse();

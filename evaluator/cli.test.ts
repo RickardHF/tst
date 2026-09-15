@@ -143,3 +143,63 @@ test("explicit --files rejects invalid entries before evaluation", () => {
         fs.rmSync(fixtureDirectory, { recursive: true, force: true });
     }
 });
+
+test("build-scores writes a keyed baseline file from JSONL results", () => {
+    const fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "agent-eval-build-scores-"));
+    const inputPath = path.join(fixtureDirectory, "eval_results.jsonl");
+    const outputPath = path.join(fixtureDirectory, "eval-scores.json");
+    fs.writeFileSync(
+        inputPath,
+        [
+            JSON.stringify({ fileName: ".github/agents/foo.agent.md", score: 8, reasoning: "solid" }),
+            JSON.stringify({ fileName: ".agents/skills/bar/SKILL.md", score: 6, reasoning: "ok" }),
+        ].join("\n") + "\n"
+    );
+
+    try {
+        const result = runCli(["build-scores", "--input", inputPath, "--output", outputPath]);
+
+        assert.equal(result.status, 0, result.stderr);
+        const scoresFile = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
+        assert.equal(scoresFile.scores[".github/agents/foo.agent.md"].type, "agent");
+        assert.equal(scoresFile.scores[".agents/skills/bar/SKILL.md"].type, "skill");
+    } finally {
+        fs.rmSync(fixtureDirectory, { recursive: true, force: true });
+    }
+});
+
+test("compare-scores fails on a regression and strips a leading path prefix before matching", () => {
+    const fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "agent-eval-compare-"));
+    const baselinePath = path.join(fixtureDirectory, "baseline.json");
+    const currentPath = path.join(fixtureDirectory, "current.jsonl");
+
+    fs.writeFileSync(
+        baselinePath,
+        JSON.stringify({
+            generatedAt: "2026-01-01T00:00:00.000Z",
+            scores: { ".github/agents/foo.agent.md": { score: 9, reasoning: "great", type: "agent" } },
+        })
+    );
+    fs.writeFileSync(
+        currentPath,
+        JSON.stringify({ fileName: "../.github/agents/foo.agent.md", score: 4, reasoning: "regressed" }) + "\n"
+    );
+
+    try {
+        const result = runCli([
+            "compare-scores",
+            "--current",
+            currentPath,
+            "--baseline",
+            baselinePath,
+            "--strip-prefix",
+            "../",
+        ]);
+
+        assert.notEqual(result.status, 0, result.stdout);
+        assert.match(result.stdout, /foo\.agent\.md/);
+        assert.match(result.stderr, /regressed by more than/);
+    } finally {
+        fs.rmSync(fixtureDirectory, { recursive: true, force: true });
+    }
+});

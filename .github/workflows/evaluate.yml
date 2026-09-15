@@ -2,6 +2,8 @@ name: Evaluate Agents & Skills
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 jobs:
   evaluate:
@@ -163,6 +165,18 @@ jobs:
             --output "${{ github.workspace }}/eval-badge.svg" \
             --date "$(date -u +%Y-%m-%d)"
 
+      - name: Build score baseline
+        if: always()
+        working-directory: evaluator
+        run: |
+          if [ ! -f eval_results.jsonl ]; then
+            echo "No results to build a score baseline from."
+            exit 0
+          fi
+          npx tsx cli.ts build-scores \
+            --input eval_results.jsonl \
+            --output "${{ github.workspace }}/eval-scores.json"
+
       - name: Upload badge artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -171,19 +185,19 @@ jobs:
           path: eval-badge.svg
           if-no-files-found: ignore
 
-      - name: Commit evaluation badge
+      - name: Commit evaluation artifacts
         if: always()
         run: |
-          if [ ! -f "${{ github.workspace }}/eval-badge.svg" ]; then
-            echo "No badge file to commit."
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add eval-badge.svg
+          for f in eval-badge.svg eval-scores.json; do
+            if [ -f "${{ github.workspace }}/$f" ]; then
+              git add "$f"
+            fi
+          done
           if git diff --cached --quiet; then
-            echo "No changes to badge."
+            echo "No changes to commit."
           else
-            git commit -m "chore: update evaluation badge [skip ci]"
+            git commit -m "chore: update evaluation badge and score baseline [skip ci]"
             git push
           fi

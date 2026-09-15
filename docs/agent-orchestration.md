@@ -11,7 +11,8 @@ automated evidence, and explicit approval before merge.
 | ------------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | [Plan and Implement](../.github/workflows/plan-implement.yml) | `issues.labeled` (`copilot:plan-and-implement`) or `workflow_dispatch` | Plans, risk-scores, and implements the change on an agent branch. |
 | [Plan Gate](../.github/workflows/plan-gate.yml)               | `pull_request` to `main`                                               | Blocks PRs whose body does not follow the required plan template. |
-| [Evaluate Agents & Skills](../.github/workflows/evaluate.yml) | `workflow_dispatch`                                                    | Scores agent/skill definitions and publishes a badge.             |
+| [Evaluate Agents & Skills](../.github/workflows/evaluate.yml) | `push` to `main` or `workflow_dispatch`                                | Scores every agent/skill definition, publishes a badge, and commits the `eval-scores.json` baseline. |
+| [Evaluate Changed Agents & Skills](../.github/workflows/evaluate-pr.yml) | `pull_request` to `main`                                     | Scores only the agent/skill artifacts changed in the PR and fails if any artifact's score drops more than 2 points versus the `main` baseline. |
 
 ## Reusable actions
 
@@ -196,6 +197,29 @@ so the review is about the system, not the agent:
   the branching in `plan_merger` show which path ran.
 - **Is the audit trail sufficient?** The run's artifacts, the branch, and
   the PR together reconstruct the decision.
+
+## Branch protection on `main`
+
+The [Plan Gate](../.github/workflows/plan-gate.yml) and
+[Evaluate Changed Agents & Skills](../.github/workflows/evaluate-pr.yml)
+checks are only meaningful if `main` cannot be updated without passing
+them. This repository does not automate branch protection via a
+workflow (it requires repo-admin privileges that a workflow token
+should not hold); instead, a repo admin must configure it once under
+**Settings → Branches → Branch protection rules** (or the equivalent
+`gh api repos/<owner>/<repo>/branches/main/protection` call):
+
+- Require a pull request before merging, with at least 1 approval.
+- Require status checks to pass before merging, including:
+  - `Plan Gate` (only relevant for agent-authored PRs, but harmless otherwise)
+  - `Evaluate Changed Agents & Skills` / `evaluate-pr`
+- Require branches to be up to date before merging.
+- Do not allow force pushes to `main`.
+- Do not allow deletion of `main`.
+
+These settings ensure every merge to `main` went through review and a
+passing score-regression check, keeping the `eval-scores.json` baseline
+trustworthy for future comparisons.
 
 The clear outcome path for a regression is to revert the implementer
 commit on the agent branch (or the merge commit on `main`) and re-open
