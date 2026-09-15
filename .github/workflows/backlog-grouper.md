@@ -25,7 +25,7 @@ concurrency:
   cancel-in-progress: false
 
 timeout-minutes: 20
-max-ai-credits: 10
+max-ai-credits: 40
 
 network:
   allowed: [defaults, github]
