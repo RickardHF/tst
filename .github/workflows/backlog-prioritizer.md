@@ -17,8 +17,8 @@ on:
 permissions:
   contents: read
   issues: read
-  # User-owned repo has no org Copilot policy; inference bills to the COPILOT_GITHUB_TOKEN owner's seat.
-  copilot-requests: none
+  # Grants the built-in GITHUB_TOKEN-based Copilot inference path; no PAT/secret required.
+  copilot-requests: write
 
 concurrency:
   group: backlog-prioritizer-${{ github.repository }}
