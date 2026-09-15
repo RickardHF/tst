@@ -17,6 +17,7 @@ on:
 permissions:
   contents: read
   issues: read
+  copilot-requests: write
 
 concurrency:
   group: backlog-prioritizer-${{ github.repository }}
