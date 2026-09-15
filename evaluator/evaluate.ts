@@ -1,7 +1,7 @@
 
 import { z } from "zod";
 import { CopilotClient, defineTool } from "@github/copilot-sdk";
-import { parseAgentFrontmatter, isKnownModel } from "./agentFrontmatter.js";
+import { parseAgentFrontmatter, parseSkillFrontmatter, isKnownModel } from "./agentFrontmatter.js";
 
 type EvaluationResult = {
     score: number;
@@ -63,6 +63,40 @@ When evaluating an agent definition, also weigh the following as part of the ove
 - Model fit: does the declared "model" suit the agent's stated role and description (e.g. a lightweight/fast model for simple tasks, a stronger reasoning model for complex or high-stakes tasks)? A missing/undefined model is an acceptable design choice and should not be penalized on its own.
 - Tool scope: is the "tools" allow-list appropriately scoped for the agent's description? Flag lists that are too loose (e.g. granting broad/wildcard access far beyond what the role needs) as well as lists that are too narrow (e.g. missing tools the agent clearly needs to fulfill its description).
 </agent-specific-criteria>`;
+
+const skillEvaluationCriteria = `
+<skill-specific-criteria>
+When evaluating a skill definition, also weigh the following as part of the overall score:
+- Name/description fit: do the "name" and "description" in the frontmatter accurately reflect what the body of the skill actually does? Penalize mismatches, vague descriptions, or descriptions that oversell the content.
+- Referenced files: if the skill body references supporting files (e.g. links or paths to scripts, templates, or other documents), those files should be present among the listed supporting artifacts. Any "referenced-but-missing" paths noted in the parsed metadata should lower the score.
+- Portability: a good skill is reusable across projects. Penalize skills that bake in project-specific details (hardcoded absolute paths, specific repository/organization names, environment-specific values) instead of describing a generic, reusable capability.
+</skill-specific-criteria>`;
+
+function findReferencedPaths(skillDefinition: string): string[] {
+    const paths = new Set<string>();
+    const isLikelyRelativePath = (candidate: string) => {
+        if (!candidate || candidate.startsWith("http://") || candidate.startsWith("https://") || candidate.startsWith("#")) {
+            return false;
+        }
+        return candidate.includes("/") || /\.[a-zA-Z0-9]+$/.test(candidate);
+    };
+
+    for (const match of skillDefinition.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
+        const candidate = match[1]?.trim();
+        if (candidate && isLikelyRelativePath(candidate)) {
+            paths.add(candidate);
+        }
+    }
+
+    for (const match of skillDefinition.matchAll(/`([^`\s]+)`/g)) {
+        const candidate = match[1]?.trim();
+        if (candidate && isLikelyRelativePath(candidate)) {
+            paths.add(candidate);
+        }
+    }
+
+    return [...paths];
+}
 
 async function evaluateBase(systemMessage: string, evaluationPrompt: string): Promise<EvaluationResult> {
     for (let attempt = 1; attempt <= maxEvaluationAttempts; attempt++) {
@@ -158,10 +192,25 @@ ${expectations}
     return await evaluateBase(systemMessage, evaluationPrompt);
 }
 
-async function evaluateSkillDefinition(skillDefinition: string, skillArtifacts?: { path: string; content: string }[]) : Promise<EvaluationResult> {
+async function evaluateSkillDefinition(skillDefinition: string, skillArtifacts?: { path: string; content: string }[], skillFolderName?: string): Promise<EvaluationResult> {
+    const parsedFrontmatter = parseSkillFrontmatter(skillDefinition);
+    if (!parsedFrontmatter.ok) {
+        return {
+            score: 0,
+            reasoning: `Skill definition frontmatter is malformed: ${parsedFrontmatter.error}.`,
+        };
+    }
+
+    const { name } = parsedFrontmatter.frontmatter;
+    const folderNameMismatch = skillFolderName !== undefined && skillFolderName !== name;
+
+    const artifactPaths = new Set((skillArtifacts ?? []).map((artifact) => artifact.path));
+    const missingReferences = findReferencedPaths(skillDefinition).filter((reference) => !artifactPaths.has(reference));
+
     const systemMessage = `
 ${baseRole}
 ${scoringSystem}
+${skillEvaluationCriteria}
 `;
     let evaluationPrompt = `
 Evaluate the following skill definition based on the criteria provided.
@@ -169,6 +218,12 @@ Evaluate the following skill definition based on the criteria provided.
 <skill-definition>
 ${skillDefinition}
 </skill-definition>
+
+<parsed-metadata>
+name: ${name}
+folder: ${skillFolderName ?? "(not provided)"}
+referenced-but-missing: ${missingReferences.length > 0 ? missingReferences.join(", ") : "(none)"}
+</parsed-metadata>
 `;
     if (skillArtifacts && skillArtifacts.length > 0) {
         evaluationPrompt += `
@@ -178,7 +233,16 @@ ${skillArtifacts.map(artifact => `<artifact path="${artifact.path}">${artifact.c
 `;
     }
 
-    return await evaluateBase(systemMessage, evaluationPrompt);
+    const result = await evaluateBase(systemMessage, evaluationPrompt);
+
+    if (folderNameMismatch) {
+        return {
+            ...result,
+            reasoning: `${result.reasoning} Note: skill "name" ("${name}") does not match its folder ("${skillFolderName}").`,
+        };
+    }
+
+    return result;
 }
 
 async function evaluateAgentDefinition(agentDefinition: string): Promise<EvaluationResult> {

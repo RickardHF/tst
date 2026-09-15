@@ -257,3 +257,87 @@ You write changelog entries. Given a pull request title, description, and diff s
         assert.match(evaluation.reasoning, /not.*recognized model/i);
     }
 );
+
+test(
+    "evaluateSkillDefinition scores a missing frontmatter block as 0",
+    { timeout: fastMalformedTimeout },
+    async () => {
+        const evaluation = await evaluateSkillDefinition("Just some instructions, no frontmatter at all.");
+
+        assert.equal(evaluation.score, 0);
+        assert.match(evaluation.reasoning, /malformed/i);
+    }
+);
+
+test(
+    "evaluateSkillDefinition scores invalid YAML frontmatter as 0",
+    { timeout: fastMalformedTimeout },
+    async () => {
+        const definition = `---
+name: broken
+description: [unclosed
+---
+
+Body text.
+`;
+        const evaluation = await evaluateSkillDefinition(definition);
+
+        assert.equal(evaluation.score, 0);
+        assert.match(evaluation.reasoning, /malformed/i);
+    }
+);
+
+test(
+    "evaluateSkillDefinition scores a missing required field as 0",
+    { timeout: fastMalformedTimeout },
+    async () => {
+        const definition = `---
+name: thing
+---
+
+Body text without a description field.
+`;
+        const evaluation = await evaluateSkillDefinition(definition);
+
+        assert.equal(evaluation.score, 0);
+        assert.match(evaluation.reasoning, /description/i);
+    }
+);
+
+test(
+    "evaluateSkillDefinition notes a folder/name mismatch without changing the score",
+    { timeout: liveCallTimeout },
+    async () => {
+        const evaluation = await evaluateSkillDefinition(goodSkillDefinition, undefined, "some-other-folder-name");
+
+        assert.equal(typeof evaluation.score, "number");
+        assert.ok(evaluation.score >= 1 && evaluation.score <= 10);
+        assert.match(evaluation.reasoning, /folder/i);
+    }
+);
+
+test(
+    "evaluateSkillDefinition scores a skill with project-specific details lower than a generic equivalent",
+    { timeout: liveCallTimeout },
+    async () => {
+        const projectSpecificSkillDefinition = `---
+name: rotate-log-files
+description: 'Rotate and compress log files in /Users/jdoe/acme-corp-internal/prod-server-42/logs for the Acme Corp payments team.'
+---
+
+# Rotate Log Files for Acme Corp Payments Team
+
+Only works against the hardcoded directory /Users/jdoe/acme-corp-internal/prod-server-42/logs on the payments-prod-42 server. Compress files older than 5 minutes and move them to /Users/jdoe/acme-corp-internal/prod-server-42/archive.
+`;
+
+        const [generic, specific] = await Promise.all([
+            evaluateSkillDefinition(goodSkillDefinition),
+            evaluateSkillDefinition(projectSpecificSkillDefinition),
+        ]);
+
+        assert.ok(
+            generic.score > specific.score,
+            `expected generic skill score (${generic.score}) to exceed project-specific skill score (${specific.score})`
+        );
+    }
+);
