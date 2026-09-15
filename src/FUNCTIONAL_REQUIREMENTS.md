@@ -32,12 +32,20 @@
 * The game view must follow the player as they move through the level.
 * The player must be prevented from moving outside the intended playable area.
 
+### Level design decisions
+
+The first playable version contains one level with one defined start and one defined goal. Its route should use approximately 3–5 platform sections and 2–4 obstacle/hazard types, beginning with an easier section and becoming progressively more difficult. These are the agreed v1 content targets recorded in [issue #2](https://github.com/RickardHF/tst/issues/2).
+
 ## 4. Hazards and Failure
 
 * The level must contain hazards that the player must avoid.
-* Contact with a hazard must cause the player to fail or lose a life.
+* Contact with a hazard must cause the player to fail.
 * Falling outside the playable level must count as a failure.
-* After failure, the player must be able to restart from the beginning of the level or from a defined checkpoint.
+* After failure, the player must be able to restart from the beginning of the level.
+
+### Failure and checkpoint decisions
+
+Version 1 uses instant failure and restart-of-level, with no lives system and no checkpoints. A hazard contact or fall restarts the attempt from the level start. These decisions are recorded in [issue #2](https://github.com/RickardHF/tst/issues/2).
 
 ## 5. Level Completion
 
@@ -45,6 +53,10 @@
 * Reaching the goal must complete the level.
 * The game must inform the player when the level has been completed.
 * The player must be able to restart the game after completing the level.
+
+### Scoring and progression decisions
+
+Version 1 does not require scoring, a timer, or collectibles. The completion condition is reaching the defined goal; any scoring or collectible system is deferred to a future decision and implementation issue. See [issue #2](https://github.com/RickardHF/tst/issues/2).
 
 ## 6. Game States
 

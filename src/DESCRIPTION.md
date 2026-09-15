@@ -8,4 +8,6 @@ The game is designed around simple, accessible controls and short levels that ca
 
 The visual style should be colourful, playful, and slightly absurd, with McSquishy’s exaggerated blob-like movement and reactions giving the game much of its personality.
 
+For the first playable version, simple coloured shapes or other programmer art are acceptable in place of custom sprites. The minimum character animation is a squash-and-stretch reaction on jumping and landing; final art and additional animation can follow later without changing the gameplay scope.
+
 The overall goal is to create a small, easy-to-understand platform game that can be picked up quickly while still giving players a satisfying challenge as they progress.
