@@ -70,3 +70,17 @@ See the [evaluator documentation](./docs/evaluator.md) for usage, arguments, eva
 
 In this repository we aim to have an application residing in the src folder. Here you can find a description of it and functional requirements.
 
+## Running the game
+
+The browser game scaffold lives at the repository root. Install dependencies, then
+run `npm run dev` and open the local URL shown by Vite:
+
+```sh
+npm install
+npm run dev
+```
+
+`npm test` runs the camera-follow unit tests, and `npm run build` type-checks and
+builds the browser bundle. The game loop, game state, and camera are kept separate
+from the canvas renderer: the renderer draws the supplied snapshot, while game
+logic updates the moving placeholder object and camera.
